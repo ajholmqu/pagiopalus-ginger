@@ -15,4 +15,6 @@ parasites.csv includes ASVs identified as potential parasites and the samples wi
 
 Holmquistetal_code.Rmd is code used to perform all analyses
 
+The .pdf is the  markdown output
+
 .newick files are 16s trees constructed in Geneious
