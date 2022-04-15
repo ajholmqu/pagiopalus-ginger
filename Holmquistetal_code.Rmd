@@ -1,0 +1,618 @@
+---
+title: "Holmquist et. al 2022"
+author: "Anna J Holmquist"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+library(tidyverse)
+library(vegan)
+library(BAT)
+library(reshape2)
+library(ape)
+```
+
+### Read in data frames
+
+```{r data}
+
+# Total samples from collection
+collection <- read.csv(file = "collection_data.csv")
+
+# Dataframe including all sequences, without filtering
+all_pagio <- read.csv("all_reads.csv")
+
+# Dataframe including all prey sequences following filtering
+prey_final <- read.csv("prey_reads.csv") 
+
+# Native versus non-native prey status
+native_status <- read.csv("native_status.csv")
+
+# Parasites
+parasites <- read.csv("parasites.csv")
+
+```
+
+# Summaries of results
+
+## Collection
+
+```{r collection summary, message=FALSE}
+
+# By block, transect and site
+collection %>%
+  group_by(site_status) %>%
+  summarise(n_distinct(id)) # 82/86
+
+
+collection %>%
+  group_by(site_status, transect, block) %>%
+  summarise(n = n_distinct(id)) %>%
+  ungroup() %>%
+  summarise(mean(n), plotrix::std.error(n)) # 5.793103	
+
+
+collection %>%
+  group_by(transect) %>%
+  summarise(n = n_distinct(id)) %>%
+  ungroup() %>%
+  summarise(mean(n), plotrix::std.error(n)) # 16.8
+
+```
+
+## Molecular
+
+```{r molecular findings summary, message=FALSE}
+
+# Reads removed
+removed_reads <- sum(all_pagio$count) - sum(prey_final$count) # 1062003
+
+# From the spiders
+all_pagio %>%
+  filter(family == "Philodromidae") %>%
+  summarize(sum(count) / removed_reads,
+            sum(count)) # 679534,	0.6412852	 
+
+# From fungi
+all_pagio %>%
+  filter(kingdom == "Fungi") %>%
+  summarize(sum(count),
+            sum(count) / removed_reads) # 234630,	0.2214234	
+
+# Hymenopterans - parisitoids
+all_pagio %>%
+  filter(order == "Hymenoptera") %>%
+  summarise(sum(count),
+            sum(count) / removed_reads) # 60060, 0.05667941	
+
+# Summary of filtered data set
+
+  # Reads and ASVs per spider
+  prey_final %>%
+    group_by(id) %>%
+    summarise(n = sum(count),
+              nasv = n_distinct(asv)) %>%
+    ungroup() %>%
+    summarise(reads_mean = mean(n), reads_stderror = plotrix::std.error(n),
+              asv_mean = mean(nasv),
+              asv_stderror = plotrix::std.error(nasv))
+  
+  # ASVs and specimens by marker
+  prey_final %>%
+    group_by(marker) %>%
+    summarise(asv = n_distinct(asv),
+              sample = n_distinct(id))
+  
+  rm(removed_reads)
+```
+
+## Taxonomy
+
+```{r taxonomy summary}
+
+# Total taxonomy breakdown
+prey_final %>%
+  summarise(n_distinct(order), n_distinct(family),
+            n_distinct(genus), n_distinct(species)) 
+
+# Percent of ASVs with matches
+
+    # Number of ASVs retained with matches 
+    length(unique(prey_final$asv[!is.na(prey_final$species)])) / 
+      length(unique(prey_final$asv)) # 0.2317073
+    
+    length(unique(prey_final$asv[!is.na(prey_final$genus)])) / 
+      length(unique(prey_final$asv)) # 0.3780488
+    
+    length(unique(prey_final$asv[!is.na(prey_final$family)])) / 
+      length(unique(prey_final$asv)) # 0.6158537
+    
+# Percent matches by marker 
+  prey_final %>%
+    group_by(marker) %>%
+    summarise(mean(percent_match))
+
+```
+
+# Prey diversity and abundance
+
+## Summarizing composition
+
+```{r shared ASVs and taxonomy}
+
+# All ASVs
+length(unique(prey_final$asv)) # 164
+
+# Shared ASVs
+length(intersect(prey_final$asv[prey_final$site_status == "ginger"],
+         prey_final$asv[prey_final$site_status == "native"])) # 29
+
+# Shared taxonomy
+length(intersect(prey_final$order[prey_final$site_status == "ginger"],
+         prey_final$order[prey_final$site_status == "native"])) # 6 orders shared
+
+length(unique(prey_final$order)) # 9
+
+length(intersect(prey_final$family[prey_final$site_status == "ginger"],
+         prey_final$family[prey_final$site_status == "native"])) # 11 families shared
+
+length(unique(prey_final$family)) # 31
+
+length(intersect(prey_final$genus[prey_final$site_status == "ginger"],
+         prey_final$genus[prey_final$site_status == "native"])) # 10 genera shared
+
+length(unique(prey_final$genus)) # 32
+
+length(intersect(prey_final$species[prey_final$site_status == "ginger"],
+         prey_final$species[prey_final$site_status == "native"])) # 5 species shared
+
+length(unique(prey_final$species)) # 23
+
+```
+
+## Hill numbers
+
+### Create community matrices
+
+```{r community matrices - individuals}
+
+# Create community matrices
+
+  # By ASVs
+    asv_comm <-
+      prey_final %>%
+      acast(id ~ asv, 
+            value.var = "count", # Count as values
+            fun.aggregate = sum) %>% # Sum counts for site
+      as.matrix()
+  
+  # Transform
+    asv_hellinger <- decostand(asv_comm, method = "hellinger")
+  
+  # Incidence  
+  asv_incidence <- asv_hellinger
+  asv_incidence[asv_incidence > 0] <- 1
+  
+  # By taxonomy - family
+  family_comm <- 
+    prey_final %>%
+    filter(!is.na(family)) %>%
+    acast(id ~ family, 
+          value.var = "count",
+          fun.aggregate = sum,
+          fill = 0) %>%
+    as.matrix()
+  
+  family_hellinger <- decostand(family_comm, method = "hellinger")
+  
+  family_incidence <- family_hellinger
+  family_incidence[family_incidence > 0] <- 1
+
+  # By taxonomy - order
+  order_comm <- 
+    prey_final %>%
+    acast(id ~ order, 
+          value.var = "count",
+          fun.aggregate = sum,
+          fill = 0) %>%
+    as.matrix()
+  
+  order_hellinger <- decostand(order_comm, method = "hellinger")
+  
+  order_incidence <- order_hellinger
+  order_incidence[order_incidence > 0] <- 1
+```
+
+### Calculate Hill numbers and perform Welch t-test
+
+```{r hill numbers using renyi}
+# ASVs
+
+  asv_hill <- 
+  renyi(asv_hellinger, 
+        scales = c(0, 1, 2), 
+        hill = T) %>%
+      cbind(collection[collection$id %in% rownames(asv_hellinger),])
+    
+    
+    # Welch t-test - ASV
+    asv_q0 <- t.test(asv_hill$`0`[asv_hill$site_status == "Ginger"], 
+                     asv_hill$`0`[asv_hill$site_status == "Native"])
+    
+    asv_q1 <- t.test(asv_hill$`1`[asv_hill$site_status == "Ginger"], 
+                     asv_hill$`1`[asv_hill$site_status == "Native"])
+    
+    asv_q2 <- t.test(asv_hill$`2`[asv_hill$site_status == "Ginger"], 
+                     asv_hill$`2`[asv_hill$site_status == "Native"])
+    
+    hill_asv_sum <- 
+      data.frame(cbind(
+      rbind(asv_q0$estimate,
+        asv_q1$estimate,
+        asv_q2$estimate),
+      rbind(asv_q0$p.value,
+        asv_q1$p.value,
+        asv_q2$p.value)))
+    
+    colnames(hill_asv_sum) <- c("ginger", "native", "p")
+    hill_asv_sum$level <- "ASV"
+    hill_asv_sum$q <- c("q = 0", "q = 1", "q = 2")
+
+# Family
+    
+    family_hill <- renyi(family_hellinger, scales = c(0, 1, 2), hill = T) %>%
+        cbind(collection[collection$id %in% rownames(family_hellinger),])
+    
+    # Welch t-test - family
+    fam_q0 <- t.test(family_hill$`0`[family_hill$site_status == "Ginger"], 
+                     family_hill$`0`[family_hill$site_status == "Native"])
+    
+    fam_q1 <- t.test(family_hill$`1`[family_hill$site_status == "Ginger"], 
+                     family_hill$`1`[family_hill$site_status == "Native"])
+    
+    fam_q2 <- t.test(family_hill$`2`[family_hill$site_status == "Ginger"], 
+                     family_hill$`2`[family_hill$site_status == "Native"])
+    
+    
+    hill_fam_sum <- data.frame(cbind(rbind(fam_q0$estimate,
+        fam_q1$estimate,
+        fam_q2$estimate),
+    rbind(fam_q0$p.value,
+        fam_q1$p.value,
+        fam_q2$p.value)))
+    
+    colnames(hill_fam_sum) <- c("ginger", "native", "p")
+    hill_fam_sum$level <- "Family"
+    hill_fam_sum$q <- c("q = 0", "q = 1", "q = 2")
+
+# Order
+    
+      order_hill <- renyi(order_hellinger, scales = c(0, 1, 2), hill = T) %>%
+          cbind(collection[collection$id %in% rownames(order_hellinger),])
+      
+      # Welch t-test - order
+      order_q0 <- t.test(order_hill$`0`[order_hill$site_status == "Ginger"],
+                         order_hill$`0`[order_hill$site_status == "Native"])
+      
+      order_q1 <- t.test(order_hill$`1`[order_hill$site_status == "Ginger"], 
+                         order_hill$`1`[order_hill$site_status == "Native"])
+      
+      order_q2 <- t.test(order_hill$`2`[order_hill$site_status == "Ginger"],
+                         order_hill$`2`[order_hill$site_status == "Native"])
+      
+      hill_order_sum <- data.frame(cbind(rbind(order_q0$estimate,
+          order_q1$estimate,
+          order_q2$estimate),
+      rbind(order_q0$p.value,
+          order_q1$p.value,
+          order_q2$p.value)))
+      
+      colnames(hill_order_sum) <- c("ginger", "native", "p")
+      hill_order_sum$q <- c("q = 0", "q = 1", "q = 2")
+      hill_order_sum$level <- "Order"
+
+# Combined table
+  hill_summary <- rbind(hill_asv_sum, hill_fam_sum, hill_order_sum) 
+  print(hill_summary)
+```
+```{r, include=FALSE}
+# Tidying up 
+rm(asv_hill, order_hill, family_hill,
+       order_q0, order_q1, order_q2,
+       asv_q0, asv_q1, asv_q2,
+       fam_q0, fam_q1, fam_q2,
+       order_comm, order_hellinger, order_incidence,
+       asv_comm, asv_hellinger, asv_incidence,
+       family_comm, family_hellinger, family_incidence,
+       hill_asv_sum, hill_fam_sum, hill_order_sum)
+  
+```
+
+## Differences in read abundances
+
+```{r read abundances, message=FALSE}
+
+reads <- 
+  prey_final %>%
+  group_by(site_status, id) %>%
+  summarise(n = sum(count)) %>%
+  ungroup() 
+
+reads %>%
+  group_by(site_status) %>%
+  summarise(mean(n), plotrix::std.error(n))
+
+t.test(reads$n[reads$site_status == "native"], 
+       reads$n[reads$site_status == "ginger"])
+```
+```{r, include=FALSE}
+rm(reads)
+```
+
+# Dietary composition
+
+## Constructing community matrices, by site
+
+```{r community matrices - sites}
+# Data for sites
+sites_data <-
+  prey_final %>%
+  group_by(site) %>%
+  filter(row_number() == 1) %>%
+  ungroup() %>%
+  select(site, site_status)
+
+# By ASV - all
+site_community_asv <- 
+  prey_final %>%
+  acast(site ~ asv, fill = 0,
+        value.var = "count", # Count as values
+        fun.aggregate = sum)
+  
+site_community_asv <- decostand(site_community_asv, method = "hellinger")
+
+# By order 
+site_community_order <- 
+  prey_final %>%
+  acast(site ~ order, fill = 0,
+        value.var = "count", # Count as values
+        fun.aggregate = sum)
+  
+site_community_order <- decostand(site_community_order, method = "hellinger")
+
+```
+
+## Calculate beta diversity using community matrices
+
+```{r beta diversity}
+beta_transform_asv <- beta(site_community_asv, func = "jaccard")
+beta_inc_asv <- beta(site_community_asv, 
+                     func = "jaccard", abund = F)
+
+beta_transform_order <- beta(site_community_order, func = "jaccard")
+beta_inc_order <- beta(site_community_order, 
+                       func = "jaccard", abund = F)
+```
+
+## Perform NMDS
+
+```{r site nmds, results='hide'}
+set.seed(200)
+
+# ASV NMDS
+site_asv_nmds1 <- metaMDS(beta_transform_asv$Btotal, trymax = 1000)
+site_asv_nmds2 <- metaMDS(beta_inc_asv$Btotal, trymax = 1000)
+
+# Order NMDS
+site_order_nmds1 <- metaMDS(beta_transform_order$Btotal, trymax = 1000)
+site_order_nmds2 <- metaMDS(beta_inc_order$Btotal, trymax = 1000)
+```
+
+```{r}
+# PERMANOVA
+adonis2(beta_transform_asv$Btotal ~ site_status, 
+        data = sites_data, method = "jaccard")
+
+adonis2(beta_inc_asv$Btotal ~ site_status, 
+        data = sites_data, method = "jaccard")
+# PERMANOVA
+adonis2(beta_inc_order$Btotal ~ site_status, 
+        data = sites_data, method = "jaccard")
+  
+adonis2(beta_transform_order$Btotal ~ site_status, 
+        data = sites_data, method = "jaccard")
+```
+```{r, include=FALSE}
+# Tidying up
+rm(site_community_asv, site_community_order)
+```
+
+## Order-level diversity
+
+```{r, message=FALSE}
+prey_final %>%
+  group_by(site_status, order) %>%
+  # Number of spiders in each site eating each order
+  summarise(n = n_distinct(id)) %>%
+  ungroup() %>%
+  # Add column for total number of spiders in each habitat
+  mutate(total = ifelse(site_status == "Ginger", 
+                        78, 58),
+         # Calculate proportion of spiders eating each order
+         prop = round(n / total, 3)) 
+```
+
+## NMDS for Hemiptera and Lepidoptera
+
+```{r splitting by hemiptera, results='hide'}
+# NMDS is doing the same thing because ASVs are distinct
+set.seed(200)
+
+# Hemiptera
+hemi <- 
+  prey_final %>%
+  filter(order == "Hemiptera" & marker == "16s") %>%
+  acast(site ~ asv, fill = 0, value.var = "count",
+        fun.aggregate = sum) %>%
+  as.matrix()
+
+hemi_phylo_16s <- 
+  BAT::beta(decostand(hemi, method = "hellinger"), 
+          tree = read.tree("16s_hemiptera_tree.newick"),
+          abund = F)
+
+hemi_nmds <- metaMDS(hemi_phylo_16s$Btotal,
+                         trymax = 1000, k = 2)
+
+# Lepidoptera
+lep <- 
+  prey_final %>%
+  filter(order == "Lepidoptera" & marker == "16s") %>%
+  #filter(!site %in% problem) %>%
+  acast(site ~ asv, fill = 0, value.var = "count",
+        fun.aggregate = sum) %>%
+  as.matrix()
+ 
+lep_phylo_16s <- 
+  BAT::beta(decostand(lep, method = "hellinger"), 
+          tree = read.tree("16s_lepidoptera_tree.newick"),
+          abund = F)
+
+
+lep_nmds <- metaMDS(lep_phylo_16s$Btotal,
+                         trymax = 1000, k = 2)
+```
+```{r, include=FALSE}
+rm(lep, lep_phylo_16s, hemi, hemi_phylo_16s)
+```
+
+# Native versus non-native prey
+
+```{r native versus non native}
+
+# Count identified
+length(unique(native_status$asv[native_status$status != "unknown"])) # 53
+length(unique(prey_final$asv)) # 164
+
+
+# Determining prey composition for each individual
+composition <- 
+  prey_final %>%
+  mutate(status = case_when(
+    asv %in% native_status$asv[native_status$status == "Native"] ~ "Native",
+    asv %in% native_status$asv[native_status$status == "Non-native"] ~ "Non-native",
+    TRUE ~ "unknown"
+    )
+  ) %>%
+  group_by(id) %>%
+  mutate(prey_comp = case_when(
+    any(status == "Non-native") & any(status == "Native") ~ "Both",
+    any(status == "Non-native") & !any(status == "Native") ~ "Non-native",
+    !any(status == "Non-native") & any(status == "Native") ~ "Native",
+    !any(status == "Non-native") & !any(status == "Native") ~ "Unknown"
+  )) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
+
+```
+
+# Parasites
+
+```{r parasites, message=FALSE}
+length(unique(parasites$id))
+
+# First, identify number of parasite ASVs and relative reads
+
+parasite_summary <-
+    parasites %>%
+    acast(id ~ asv, fill = 0, value.var = "count") %>%
+    as.matrix() %>%
+    decostand(method = "hellinger") %>%
+    melt() %>%
+    filter(value != 0) %>%
+    rename(id = Var1,
+           asv = Var2,
+           rel_read = value) %>%
+    left_join(parasites, by = c("id", "asv")) %>%
+    group_by(id, order, site, site_status) %>%
+    summarise(n_asv = n_distinct(asv),
+              n_read = sum(rel_read))
+
+# Add in spiders that had no parasitism
+parasite_summary <- 
+  prey_final %>%
+  filter(!id %in% parasite_summary$id) %>%
+  group_by(id) %>%
+  filter(row_number() == 1) %>%
+  mutate(n_asv = 0,
+         n_read = 0,
+         order = NA) %>%
+  select(id, site, site_status, order, n_asv, n_read) %>%
+  rbind(parasite_summary)  %>%
+  ungroup()
+
+t.test(parasite_summary$n_asv[parasite_summary$site_status == "native"],
+       parasite_summary$n_asv[parasite_summary$site_status == "ginger"]) # 0.0002957
+
+t.test(parasite_summary$n_read[parasite_summary$site_status == "native"],
+       parasite_summary$n_read[parasite_summary$site_status == "ginger"]) # 0.00223
+
+# Wasps
+wasps <- 
+  parasites %>%
+  filter(order == "Hymenoptera") 
+
+wasps %>%
+  summarise(n_distinct(id),
+            n_distinct(asv))
+
+wasps %>%
+  group_by(site_status) %>%
+  summarise(n_distinct(id),
+            n_distinct(asv))
+
+wasps %>%
+  filter(percent_match >= 92) %>%
+  group_by(family, site_status) %>%
+  summarise(n_distinct(id))
+
+wasps <-
+  parasite_summary %>%
+  filter(order == "Hymenoptera" | is.na(order)) 
+  
+t.test(wasps$n_asv[wasps$site_status == "native"],
+       wasps$n_asv[wasps$site_status == "ginger"]) # 0.01165
+
+t.test(wasps$n_read[wasps$site_status == "native"],
+       wasps$n_read[wasps$site_status == "ginger"]) # 0.03998
+
+# Fungi
+fungi <- 
+  parasites %>%
+  filter(order != "Hymenoptera") 
+
+fungi %>%
+  summarise(n_distinct(id),
+            n_distinct(asv))
+
+fungi %>%
+  group_by(site_status) %>%
+  summarise(n_distinct(id),
+            n_distinct(asv))
+
+fungi <-
+  parasite_summary %>%
+  filter(order != "Hymenoptera" | is.na(order)) 
+  
+t.test(fungi$n_asv[fungi$site_status == "native"],
+       fungi$n_asv[fungi$site_status == "ginger"]) # 3.777e-06
+
+t.test(fungi$n_read[fungi$site_status == "native"],
+       fungi$n_read[fungi$site_status == "ginger"]) # 6.097e-06
+
+```
