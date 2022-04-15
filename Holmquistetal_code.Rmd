@@ -1,8 +1,10 @@
 ---
-title: "Holmquist et. al 2022"
-author: "Anna J Holmquist"
+title: "Assessing source-sink dynamics in invaded habitat using metabarcoding"
+author: "Script by Anna J Holmquist"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
