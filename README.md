@@ -1,7 +1,9 @@
-# pagiopalus-ginger
-Code and data associated with publication titled "Assessing source-sink dynamics in invaded habitat using metabarcoding"
+# Assessing source-sink dynamics in invaded habitat using metabarcoding
+## Anna J. Holmquist, Seira A. Adams, Rosemary G. Gillespie
 
-# Data files included
+Code and data associated with publication titled unpublished article titled "Assessing source-sink dynamics in invaded habitat using metabarcoding"
+
+### Data files included: 
 
 all_reads.csv contains all reads produced following DADA2 and basic filtering
 
@@ -14,5 +16,7 @@ native_status.csv includes information on native and non-native statuses for ASV
 parasites.csv includes ASVs identified as potential parasites and the samples with which these are associated
 
 Holmquistetal_code.Rmd is code used to perform all analyses
+
+The .pdf is the  markdown output
 
 .newick files are 16s trees constructed in Geneious
