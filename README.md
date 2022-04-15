@@ -1,7 +1,9 @@
-# pagiopalus-ginger
+# Assessing source-sink dynamics in invaded habitat using metabarcoding
+## Anna J. Holmquist, Seira A. Adams, Rosemary G. Gillespie
+
 Code and data associated with publication titled "Assessing source-sink dynamics in invaded habitat using metabarcoding"
 
-# Data files included
+## Data files included: 
 
 all_reads.csv contains all reads produced following DADA2 and basic filtering
 
