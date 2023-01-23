@@ -1,7 +1,7 @@
-# Assessing source-sink dynamics in invaded habitat using metabarcoding
+# Invasion by an ecosystem engineer changes biotic interactions between native and non-native taxa
 ## Anna J. Holmquist, Seira A. Adams, Rosemary G. Gillespie
 
-Code and data associated with publication titled unpublished article titled "Assessing source-sink dynamics in invaded habitat using metabarcoding"
+Code and data associated with publication titled unpublished article titled "Invasion by an ecosystem engineer changes biotic interactions between native and non-native taxa"
 
 ### Data files included: 
 
@@ -16,7 +16,3 @@ native_status.csv includes information on native and non-native statuses for ASV
 parasites.csv includes ASVs identified as potential parasites and the samples with which these are associated
 
 Holmquistetal_code.Rmd is code used to perform all analyses
-
-The .pdf is the  markdown output
-
-.newick files are 16s trees constructed in Geneious
