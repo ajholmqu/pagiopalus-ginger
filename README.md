@@ -15,4 +15,6 @@ native_status.csv includes information on native and non-native statuses for ASV
 
 parasites.csv includes ASVs identified as potential parasites and the samples with which these are associated
 
+asv_all.fasta includes sequences for all ASVs produced from DADA2 prior to any filtering procedures
+
 Holmquistetal_code.Rmd is code used to perform all analyses
