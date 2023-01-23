@@ -1,0 +1,5 @@
+.RData
+.Rhistory
+*.Rproj.*
+Figures/
+figures.Rmd
