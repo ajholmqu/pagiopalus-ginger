@@ -1,5 +1,5 @@
 ---
-title: "Assessing source-sink dynamics in invaded habitat using metabarcoding"
+title: "Invasion by an ecosystem engineer changes biotic interactions between native and non-native taxa"
 author: "Script by Anna J Holmquist"
 date: "`r Sys.Date()`"
 output:
@@ -21,9 +21,13 @@ library(reshape2)
 library(ape)
 library(ggpubr)
 library(ComplexHeatmap)
+library(stargazer)
+library(gt)
+library(igraph)
+library(bipartite)
 ```
 
-### Read in data frames
+## Read in data frames
 
 ```{r data}
 
@@ -53,21 +57,21 @@ parasites <- read.csv("parasites.csv")
 # By block, transect and site
 collection %>%
   group_by(site_status) %>%
-  summarise(n_distinct(id)) # 82/86
+  summarise(n_distinct(id)) 
 
 
 collection %>%
   group_by(site_status, transect, block) %>%
   summarise(n = n_distinct(id)) %>%
   ungroup() %>%
-  summarise(mean(n), plotrix::std.error(n)) # 5.793103	
+  summarise(mean(n), plotrix::std.error(n)) 
 
 
 collection %>%
   group_by(transect) %>%
   summarise(n = n_distinct(id)) %>%
   ungroup() %>%
-  summarise(mean(n), plotrix::std.error(n)) # 16.8
+  summarise(mean(n), plotrix::std.error(n)) 
 
 ```
 
@@ -77,25 +81,25 @@ collection %>%
 
 # Reads removed
 total_reads <- sum(all_pagio$count)
-removed_reads <- sum(all_pagio$count) - sum(prey_final$count) # 1059644
+removed_reads <- sum(all_pagio$count) - sum(prey_final$count) 
 
 # From the spiders
 all_pagio %>%
   filter(family == "Philodromidae") %>%
   summarize(sum(count) / removed_reads,
-            sum(count)) # 679534,	0.6412852	 
+            sum(count)) 
 
 # From fungi
 all_pagio %>%
   filter(kingdom == "Fungi") %>%
   summarize(sum(count),
-            sum(count) / removed_reads) # 234630,	0.2214234	
+            sum(count) / removed_reads) 
 
 # Hymenopterans - parisitoids
 all_pagio %>%
   filter(order == "Hymenoptera") %>%
   summarise(sum(count),
-            sum(count) / removed_reads) # 60060, 0.05667941	
+            sum(count) / removed_reads) 
 
 # Summary of filtered data set
 
@@ -135,13 +139,13 @@ prey_final %>%
 
     # Number of ASVs retained with matches 
     length(unique(prey_final$asv[!is.na(prey_final$species)])) / 
-      length(unique(prey_final$asv)) # 0.2317073
+      length(unique(prey_final$asv))
     
     length(unique(prey_final$asv[!is.na(prey_final$genus)])) / 
-      length(unique(prey_final$asv)) # 0.3780488
+      length(unique(prey_final$asv))
     
     length(unique(prey_final$asv[!is.na(prey_final$family)])) / 
-      length(unique(prey_final$asv)) # 0.6158537
+      length(unique(prey_final$asv)) 
     
 # Percent matches by marker 
   prey_final %>%
@@ -162,21 +166,8 @@ prey_final %>%
     ylab("Number of ASVs") +
     scale_fill_brewer(palette = "Spectral") +
     theme_minimal()
-  p2 <- prey_final %>%
-    filter(!is.na(family)) %>%
-    group_by(site_status, family) %>%
-    summarise(n = n_distinct(asv)) %>%
-    ungroup() %>%
-    rename(Family = family) %>%
-    mutate(site_status = ifelse(site_status == "ginger", "Ginger-invaded", "Native forest")) %>%
-    ggplot() +
-    geom_bar(aes(site_status, n, fill = Family), alpha = 0.6,
-             stat = "identity", color = "black") +
-    xlab("Site status") +
-    ylab("Number of ASVs") +
-    scale_fill_brewer(palette = "Spectral") +
-    theme_minimal()
-
+  
+print(p1)
 ```
 
 # Prey diversity and abundance
@@ -186,32 +177,32 @@ prey_final %>%
 ```{r shared ASVs and taxonomy}
 
 # All ASVs
-length(unique(prey_final$asv)) # 164
+length(unique(prey_final$asv)) 
 
 # Shared ASVs
 length(intersect(prey_final$asv[prey_final$site_status == "ginger"],
-         prey_final$asv[prey_final$site_status == "native"])) # 29
+         prey_final$asv[prey_final$site_status == "native"])) 
 
 # Shared taxonomy
 length(intersect(prey_final$order[prey_final$site_status == "ginger"],
-         prey_final$order[prey_final$site_status == "native"])) # 6 orders shared
+         prey_final$order[prey_final$site_status == "native"])) 
 
-length(unique(prey_final$order)) # 9
+length(unique(prey_final$order))
 
 length(intersect(prey_final$family[prey_final$site_status == "ginger"],
-         prey_final$family[prey_final$site_status == "native"])) # 11 families shared
+         prey_final$family[prey_final$site_status == "native"]))
 
-length(unique(prey_final$family)) # 31
+length(unique(prey_final$family))
 
 length(intersect(prey_final$genus[prey_final$site_status == "ginger"],
-         prey_final$genus[prey_final$site_status == "native"])) # 10 genera shared
+         prey_final$genus[prey_final$site_status == "native"]))
 
-length(unique(prey_final$genus)) # 32
+length(unique(prey_final$genus)) 
 
 length(intersect(prey_final$species[prey_final$site_status == "ginger"],
-         prey_final$species[prey_final$site_status == "native"])) # 5 species shared
+         prey_final$species[prey_final$site_status == "native"])) 
 
-length(unique(prey_final$species)) # 23
+length(unique(prey_final$species)) 
 
 ```
 
@@ -337,7 +328,7 @@ length(unique(prey_final$species)) # 23
     mutate(`Mean Difference` = as.numeric(ginger) - as.numeric(native)) %>%
     select(level, q, `Mean Difference`, ginger, native, t, p)
   
-  hill_table <-  gt(hill_summary, groupname_col = "level", rowname_col = "q") %>%
+  hill_table <-  gt::gt(data = hill_summary, groupname_col = "level", rowname_col = "q") %>%
     cols_label(ginger = "Ginger-invaded",
                native = "Native forest", 
                t = "t-statistic",
@@ -354,19 +345,8 @@ length(unique(prey_final$species)) # 23
                 row_group.padding = 5,
                 column_labels.font.size = 14, table.font.size = 12, 
                 row_group.font.size = 14)
-```
+hill_table
 
-```{r, include=FALSE}
-# Tidying up 
-rm(asv_hill, order_hill, family_hill,
-       order_q0, order_q1, order_q2,
-       asv_q0, asv_q1, asv_q2,
-       fam_q0, fam_q1, fam_q2,
-       order_comm, order_hellinger, order_incidence,
-       asv_comm, asv_hellinger, asv_incidence,
-       family_comm, family_hellinger, family_incidence,
-       hill_asv_sum, hill_fam_sum, hill_order_sum)
-  
 ```
 
 ## Differences in read abundances
@@ -389,8 +369,8 @@ t.test(reads$n[reads$site_status == "native"],
 
 Dietary composition
 
-## Calculate beta diversity using individuals 
-```{r beta diversity}
+# Calculate beta diversity using individuals 
+```{r beta diversity - individuals}
 beta_transform_asv <- beta(asv_hellinger, func = "s", abund = T)
 beta_inc_asv <- beta(asv_comm, 
                      func = "jaccard", abund = F)
@@ -401,7 +381,7 @@ beta_inc_order <- beta(order_comm,
 ```
 
 ## Melt beta diversity
-```{r}
+```{r beta df - individuals }
 b1 <- as.matrix(beta_transform_asv$Btotal)
 b1[upper.tri(b1)] <- NA
 
@@ -443,10 +423,11 @@ b2_p <- order_b2 %>%
   theme_minimal()
 
 beta_indv_plot <- ggarrange(b1_p, b2_p, labels = c("ASV", "Order"))
+print(beta_indv_plot)
 ggsave("SupplementalFigure2.pdf", height = 5, width = 12, units = "in", dpi = 600)
 ```
 
-## Constructing community matrices, by site
+# Constructing community matrices, by site
 ```{r community matrices - sites}
 # Data for sites
 sites_data <-
@@ -480,8 +461,8 @@ site_order_inc[site_order_inc > 0] <- 1
 
 ```
 
-## Calculating distances
-```{r}
+# Calculating distances
+```{r distance - sites}
 dist_asv_hell <- vegdist(site_asv_hell, method = "euclidean")
 dist_order_hell <- vegdist(site_order_hell, method = "euclidean")
 
@@ -491,7 +472,7 @@ dist_order_inc <- vegdist(site_order_inc, method = "jaccard")
 ```
 
 ## PERMANOVA
-```{r}
+```{r perm}
 # PERMANOVA
 perm_asv_hell <- adonis2(site_asv_hell ~ site_status, 
         data = sites_data, method = "euclidean")
@@ -538,7 +519,7 @@ perm_table <- test %>%
          F = round(as.numeric(F), digits = 4))
 
 
-perm_table <- gt(perm_table, groupname_col = "Level", rowname_col = "Abundance Type") %>%
+perm_table <- gt::gt(perm_table, groupname_col = "Level", rowname_col = "Abundance Type") %>%
      cols_align(align = "center",
                 columns = c("F", "Pr(>F)", "R2")) %>%
   tab_options(table.font.names = "Times New Roman", 
@@ -552,21 +533,16 @@ perm_table <- gt(perm_table, groupname_col = "Level", rowname_col = "Abundance T
               ) %>%
   cols_width(`Abundance Type` ~ 120) %>%
   cols_label(R2 = md("R<sup>2</sup>"))
+perm_table
 ```
 
 ## PERMDISP
-```{r}
-library(car)
-
+```{r dispersion, results='hide'}
 mod1 <- anova(betadisper(dist_asv_hell, sites_data$site_status))
-gt(mod1)
 mod2 <- anova(betadisper(dist_asv_inc, sites_data$site_status))
-gt(mod2)
 mod3 <- anova(betadisper(dist_order_hell, sites_data$site_status))
 mod4 <- anova(betadisper(dist_order_inc, sites_data$site_status))
 
-
-library(stargazer)
 stargazer(mod1, mod2, mod3, mod4, 
           title = c("PERMDISP - ASV Hellinger", 
                     "PERMDISP - ASV Incidence", 
@@ -589,7 +565,7 @@ site_order_nmds2 <- metaMDS(dist_order_inc, trymax = 1000)
 ```
 
 ## Plot NMDS
-```{r plot}
+```{r plot nmds}
 
 PlotNMDS <- function(nmds, data){
  # Transformed
@@ -634,11 +610,11 @@ nmds_plot <- ggpubr::ggarrange(p1, p2, p3, p4, ncol = 2, nrow = 2,
                                common.legend = T, labels = "AUTO")
 ggsave("Figure3.pdf", dpi = 600, height = 9, width = 10, unit = "in")
 
-
+print(nmds_plot)
 ```
 
-## Calculate beta diversity using communities 
-```{r beta diversity}
+# Calculate beta diversity using communities 
+```{r beta diversity - sites}
 beta_transform_asv <- beta(site_asv_inc, func = "s", abund = T)
 beta_inc_asv <- beta(site_asv_inc, 
                      func = "jaccard", abund = F)
@@ -649,7 +625,7 @@ beta_inc_order <- beta(site_order_inc,
 ```
 
 ## Melt beta diversity
-```{r}
+```{beta df - sites}
 b1 <- as.matrix(beta_transform_asv$Btotal)
 b1[upper.tri(b1)] <- NA
 
@@ -753,6 +729,7 @@ p4 <- order_b3 %>%
 
 comm_beta <- ggarrange(p1,p2,p3,p4,
                        common.legend = TRUE)
+print(comm_beta)
 ggsave("comm_beta_asv.pdf", dpi = 600, height = 6, width = 10, unit = "in")
 
 #ggsave("nmds.pdf", width = 10, heigh = 8, dpi = 600)
@@ -802,10 +779,11 @@ beta <- gt::gt(beta_tests, groupname_col = "comp", rowname_col = "type") %>%
   #cols_width(`Abundance Type` ~ 120) %>%
   cols_label(Pr = "Pr(>F)",
              f = "F")
+print(beta)
 ```
 
-## Order-level diversity
-```{r, message=FALSE}
+# Order-level diversity
+```{r orders}
 prey_final %>%
   group_by(site_status, order) %>%
   # Number of spiders in each site eating each order
@@ -819,9 +797,6 @@ prey_final %>%
 ```
 
 ```{r order bipartite}
-library(igraph)
-library(bipartite)
-
 order_div <- 
   prey_final %>%
   group_by(site_status, order) %>%
@@ -848,55 +823,27 @@ green_col <- green(7)
 # Purples - 8
 purp <- colorRampPalette(c("#efe6f5", "#764694"))
 purp_col <- purp(8)
-int <- colorspace::choose_palette()
-int(10)
 
 int <- c("#D2EEEA", "#88C3C8", "#5DA0B0", "#72B2BC", "#326986", 
   "#397C96", "#D2EEEA", "#B6E2E0", "#9ED3D4")
 
-Aran: "#F1F1F1"
-Neur: "#F1F1F1"
-Psc: "#D5E9EE"
-Thys: "#BDD9E7"
-Col: "#A7C6DD"
-Ent: "#8796C2"
-Dip:"#7C7BB2"
-Lep: "#755E9F"
-Hemi :"#6F3C8B"
+#Aran: "#F1F1F1"
+#Neur: "#F1F1F1"
+#Psc: "#D5E9EE"
+#Thys: "#BDD9E7"
+#Col: "#A7C6DD"
+#Ent: "#8796C2"
+#Dip:"#7C7BB2"
+#Lep: "#755E9F"
+#Hemi :"#6F3C8B"
   
-
-# Bipartite
-combo_color <- c("white", purp_col[1], green_col[1], 
-                  green_col[2], purp_col[2], purp_col[3],
-                  green_col[3], purp_col[4], green_col[4], 
-                  purp_col[5], purp_col[6], purp_col[8], green_col[5])
-
-web <- plotweb(order_mat, col.low = c(green_col[4],purp_col[4]),
-        col.interaction = "white",col.high = int)
-bipartite::visweb(order_mat, text = "interaction", textcol = "black", 
-                  square = "defined", labsize = 2)
-grid <- bipartite::visweb(order_mat, text = "interaction", textcol = "black", 
-                  square = "defined", def.col = combo_color, labsize = 1)
-
-
-order_bar <-
-  order_div %>%
-  ggplot() +
-  geom_bar(aes(order, n, fill = site_status), 
-           stat = "identity", position = "dodge", alpha = 0.7) +
-  theme(axis.text.x = element_text(angle = 90)) +
-  theme_transparent() +
-  scale_fill_manual(values = site_color)
-
 ```
 
-
 # Native versus non-native prey
-
 ```{r native versus non native}
 
 # Count identified
-length(unique(native_status$asv[native_status$status != "unknown"])) # 53
+length(unique(native_status$asv[native_status$status != "unknown"])) 
 length(unique(prey_final$asv)) # 164
 
 # Determining prey composition for each individual
@@ -932,27 +879,17 @@ composition %>%
 
 ```
 
-```{r waffle}
+## Waffle plot
+```{r waffle} 
+
 # Create waffle plot
 waffling <- 
-  prey_final %>%
-  mutate(status2 = case_when(
-    asv %in% native2$asv[native2$status2 == "Native"] ~ "Native",
-    asv %in% native2$asv[native2$status2 == "Non-native"] ~ "Non-native",
-    TRUE ~ "unknown"
-    )
-  ) %>%
+  composition %>%
   group_by(id) %>%
-  mutate(prey_comp = case_when(
-    any(status2 == "Non-native") & any(status2 == "Native") ~ "Both",
-    any(status2 == "Non-native") & !any(status2 == "Native") ~ "Non-native",
-    !any(status2 == "Non-native") & any(status2 == "Native") ~ "Native",
-    !any(status2 == "Non-native") & !any(status2 == "Native") ~ "Unknown"
-  )) %>%
   filter(row_number() == 1) %>%
   ungroup()
 
-waffling %>%
+composition %>%
   group_by(site_status, prey_comp) %>%
   summarise(n_distinct(id))
 
@@ -964,8 +901,8 @@ ginger_grid$cat <- c(sort(waffling$prey_comp[waffling$site_status == "ginger"]),
                      "empty", "empty", "empty")
 
 waffle_1 <- 
-  ggplot(ginger_grid, aes( x = x, y = y, fill = cat)) +
-  geom_tile(color = "white", size = 1, alpha = 0.7) +
+  ggplot(ginger_grid, aes(x = x, y = y, fill = cat)) +
+  geom_tile(color = "white", linewidth = 1, alpha = 0.7) +
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(expand = c(0, 0), trans = 'reverse') +
   scale_fill_manual(values = colors) +
@@ -979,7 +916,7 @@ native_grid$cat <- c(sort(waffling$prey_comp[waffling$site_status == "native"]),
 
 waffle_2 <- 
   ggplot(native_grid, aes( x = x, y = y, fill = cat)) +
-  geom_tile(color = "white", size = 1, alpha = 0.7) +
+  geom_tile(color = "white", linewidth = 1, alpha = 0.7) +
   scale_x_continuous(expand = c(0, 0)) +
   scale_y_continuous(expand = c(0, 0), trans = 'reverse') +
   scale_fill_manual(values = colors) +
@@ -991,13 +928,12 @@ waffle_combo <-
           labels = c("Diet of spiders in ginger-invaded habitat",
                      "Diet of spiders in native forest"),
           vjust = -0.5, legend = "bottom")
+
+print(waffle_combo)
 ```
 
 # Parasites
-
 ```{r parasites, message=FALSE}
-
-length(unique(parasites$id))
 
 parasites <- parasites %>%
   mutate(type = ifelse(order == "Hymenoptera", "wasp", "fungi"))
@@ -1032,9 +968,8 @@ parasite_summary <-
   rbind(parasite_summary) %>%
   mutate(site_status = tolower(site_status))
 
-
 t.test(parasite_summary$n_asv[parasite_summary$site_status == "native"],
-       parasite_summary$n_asv[parasite_summary$site_status == "ginger"]) # 0.04055
+       parasite_summary$n_asv[parasite_summary$site_status == "ginger"]) 
 
 parasite_summary %>%
   group_by(site_status) %>%
@@ -1048,9 +983,6 @@ parasites %>%
   summarise(n_distinct(id))
 
 # Wasps
-hym_parasites <- 
-  read.csv("") 
-
 wasps <-
   parasite_summary %>%
   filter(type == "wasp" | is.na(type)) 
@@ -1060,63 +992,21 @@ wasps %>%
   group_by(site_status) %>%
   summarise(n_distinct(id))
 
-parasites %>%
-  filter(percent_match >= 92 & order == "Hymenoptera") %>%
-  group_by(site_status, family, genus, percent_match) %>%
-  summarise(n_distinct(id))
-
-parasites %>%
-  filter(percent_match >= 92 & order == "Hymenoptera") %>%
-  group_by(site_status) %>%
-  group_by(site_status, family) %>%
-  summarise(n_distinct(id))
-
 t.test(wasps$n_asv[wasps$site_status == "native"],
-       wasps$n_asv[wasps$site_status == "ginger"]) # 0.1933
-
-hymenoptera_parasite <- hymenoptera_parasite %>% 
-  filter(percent_match >= 85) %>%
-  group_by(asv) %>%
-  filter(row_number() == 1) %>%
-  ungroup()
-
+       wasps$n_asv[wasps$site_status == "ginger"]) 
 
 # Fungi
 fungi <- 
   parasite_summary %>%
   filter(type == "fungi" | is.na(type)) 
 
-fungi %>%
-  filter(!is.na(type)) %>%
-  ungroup() %>%
-  group_by(site_status) %>%
-  summarise(n_distinct(id))
-
-fungi %>%
-  group_by(site_status) %>%
-  summarise(n_distinct(id),
-            n_distinct(asv))
-
 t.test(parasite_summary$n_asv[parasite_summary$site_status == "native"],
-       parasite_summary$n_asv[parasite_summary$site_status == "ginger"]) # 4.411e-06
+       parasite_summary$n_asv[parasite_summary$site_status == "ginger"]) 
 
-parasites %>%
-  filter(order != "Hymenoptera") %>%
-  group_by(site_status, order, family, genus) %>%
-  summarise(n_distinct(id))
-
-parasites %>%
-  filter(order != "Hymenoptera") %>%
-  group_by(site_status, id) %>%
-  summarise(n_distinct(asv))
-
-parasites %>%
-  filter(order != "Hymenoptera") %>%
-  group_by(site_status, id) %>%
-  filter(n_distinct(asv) > 1)
 
 ```
 
+## Figure
 ```{r parasite figure}
 
 # Figure
@@ -1165,6 +1055,7 @@ parasite_fungi <-
                     gp=gpar(fontsize=10, col="white", fontface="bold"))
         }, show_heatmap_legend = F)
 
-rownames(parasite_heatmap)
+print(parasite_wasp)
+print(parasite_fungi)
 
 ```
